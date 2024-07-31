@@ -1,0 +1,643 @@
+--- 
+title: "Women's Fertility & Education: A Decades-Long Analysis"
+author: "Elihou O. Adje"
+format: 
+  dashboard:
+    logo: images/evihdaf_logo.png
+    github: https://github.com/Isholasky
+execute:
+  echo: false
+  warning: false
+  message: false
+include-before-body: 
+  text: | 
+    <script>
+    function select_one_fert() {
+      document.getElementById("continent_filter_fert").getElementsByClassName("selectized")[0].selectize.setValue("World", false);
+      }
+    $(document).ready(select_one_fert);
+    </script>
+    
+      <script>
+      function select_one_sch() {
+      document.getElementById("continent_filter_sch").getElementsByClassName("selectized")[0].selectize.setValue("World", false);
+      }
+    $(document).ready(select_one_sch);
+    </script>
+
+    <script>
+    function select_mult_fert() {
+      var default_countries = ["Niger","Somalia","Congo, Dem. Rep.","Mali","Chad"];
+      document.getElementById("country_filter_fert").getElementsByClassName("selectized")[0].selectize.setValue(default_countries, false);
+      }
+    $(document).ready(select_mult_fert);
+    </script>
+    
+    <script>
+    function select_mult_sch() {
+      var default_countries = ["Brunei","Japan","Australia","Israel","New Zealand"];
+      document.getElementById("country_filter_sch").getElementsByClassName("selectized")[0].selectize.setValue(default_countries, false);
+      }
+    $(document).ready(select_mult_sch);
+    </script>
+
+---
+
+```{r}
+# Load packages 
+if(!require(pacman)) install.packages("pacman")
+pacman::p_load(tidyverse, 
+               here,
+               sf,
+               bslib, 
+               bsicons,
+               rnaturalearth, 
+               plotly, 
+               countrycode, 
+               htmltools, 
+               reactable,
+               janitor,
+               visdat,
+               crosstalk,
+               htmltools
+               )
+```
+
+# Fertility Trends
+
+```{r include=FALSE}
+
+# Import world population data in 2023
+world_pop2023_data <- read_csv(here("data/population-data-2023.csv"), skip = 4, col_names = c("Geography", "Population"))
+
+# Print data
+world_pop2023_data
+
+# Data wrangling
+world_pop2023_data <- world_pop2023_data %>%
+  filter(Geography != "GEOGRAPHY") %>% 
+  distinct() %>%
+  mutate(Geography = paste(Geography,str_extract(Population,"^[^.,0123456789]*",)),
+         Geography = str_trim(Geography)) %>% 
+  mutate(Population = str_extract(Population, "(\\d+\\.\\d+)|(\\d+)"),
+         Population = as.numeric(Population))
+
+# Key metric calculation (Unit in billions)
+world_pop_2023 <- world_pop2023_data %>% 
+  filter(Geography == "WORLD") %>% 
+  pull(Population)
+
+```
+
+```{r include=FALSE}
+
+# Import world birth data
+world_bth2023_data <- read_csv(here("data/world-births-data-2023.csv"), skip = 4, col_names = c("Geography", "Births"))
+
+# Print data
+world_bth2023_data
+
+# Data wrangling
+world_bth2023_data <- world_bth2023_data %>%
+  filter(Geography != "GEOGRAPHY") %>% 
+  distinct() %>%
+  mutate(Geography = paste(Geography,str_extract(Births,"^[^.,0123456789]*")),
+         Geography = str_trim(Geography)) %>% 
+  mutate(Births = str_extract(Births, "(\\d+\\.\\d+)|(\\d+)"),
+         Births = as.numeric(Births))
+
+# Key metric calculation (Unit in billions)
+world_births_2023 <- world_bth2023_data %>% 
+  filter(Geography == "WORLD") %>% 
+  pull(Births)
+
+```
+
+```{r include=FALSE}
+
+# Import Total Fertility Rate data in 2023
+world_tfr2023_data <- read_csv(here("data/fertility-rates-2023.csv"), skip = 4, col_names = c("Geography", "TFR"))
+
+# View data
+world_tfr2023_data
+
+# Data wrangling
+world_tfr2023_data <- world_tfr2023_data %>%
+  filter(Geography != "GEOGRAPHY") %>% 
+  distinct() %>%
+  mutate(Geography = paste(Geography,str_extract(TFR,"^[^.,0123456789]*")),
+         Geography = str_trim(Geography)) %>% 
+  mutate(TFR = str_extract(TFR, "(\\d+\\.\\d+)|(\\d+)"),
+         TFR = as.numeric(TFR))
+
+# Key metric calculation
+world_tfr_2023 <- world_tfr2023_data %>% 
+  filter(Geography == "WORLD") %>% 
+  pull(TFR)
+
+```
+
+
+```{r include=FALSE}
+
+# Import World population data in 2050
+world_pop2050_data <- read_csv(here("data/population-data-2050.csv"), skip = 4, col_names = c("Geography", "Population"))
+
+# View data
+world_pop2050_data
+
+# Data wrangling
+world_pop2050_data <- world_pop2050_data %>%
+  filter(Geography != "GEOGRAPHY") %>% 
+  distinct() %>%
+  mutate(Geography = paste(Geography,str_extract(Population,"^[^.,0123456789]*")),
+         Geography = str_trim(Geography)) %>% 
+  mutate(Population = str_extract(Population, "(\\d+\\.\\d+)|(\\d+)"),
+         Population = as.numeric(Population))
+
+# Key metric calculation (Unit in billions)
+world_pop_2050 <- world_pop2050_data %>% 
+  filter(Geography == "WORLD") %>% 
+  pull(Population)
+
+```
+
+```{r include=FALSE}
+
+# Import GAPMINDER Fertility Rates Data
+fert_rates_data <- read_csv(here("data/children_per_woman_total_fertility.csv"))
+
+# View fertility data
+print(fert_rates_data)
+
+# Inspect fertility data
+vis_dat(fert_rates_data)
+
+```
+
+## Row 1 {height=25%}
+
+```{r}
+vbs_fert <- list(
+  value_box(
+    title = "World Population (2023)",
+    value = paste(round(world_pop_2023/1000,2), "B"),
+    showcase = bsicons::bs_icon("person"),
+    theme = value_box_theme(bg = "#bdd7e7")
+  ),
+  value_box(
+    title = "Total births (2023)",
+    value = paste(round(world_births_2023,2), "M"),
+    showcase = bsicons::bs_icon("emoji-smile"),
+    theme = value_box_theme(bg = "#6baed6")
+  ),
+  value_box(
+    title = "Total Fertility Rate (2023)",
+    value = paste(round(world_tfr_2023,2), "bths"),
+    showcase = bsicons::bs_icon("person-standing-dress"),
+    theme = value_box_theme(bg = "#3182bd")
+  ),
+  value_box(
+    title = "Projected Population (2050)",
+    value = paste(round(world_pop_2050/1000, 2), "B"),
+    showcase = bsicons::bs_icon("person-plus"),
+    theme = value_box_theme(bg = "#08519c")
+  )
+)
+
+layout_column_wrap(
+  width = "250px",
+  !!!vbs_fert
+)
+
+```
+
+## Row 2 {height=75%}
+
+### Col 1 {width=50%}
+
+```{r title = "Top 10 countries by fertility rates in 2023"}
+
+fert_rates_2023 <- fert_rates_data %>%
+  # Add  ISO Code to countries
+  mutate(country_code = countrycode(country, "country.name", "iso3c"), .after = "country") %>% # Some values were not matched unambiguously: Channel Islands, Netherlands Antilles
+  mutate(
+  # Replace missings based on the ISO Online Browsing Information site [https://www.iso.org/obp/ui/#home]
+    country_code = case_match(
+      country,
+      "Channel Islands" ~ "CHI", # Not officially assigned
+      "Netherlands Antilles" ~ "ANT",
+      .default = country_code
+    )
+  ) %>% 
+  mutate(continent = countrycode(country_code, "iso3c", "continent"), .after = "country_code") %>% 
+  pivot_longer(cols = !country:continent, names_to = "year", values_to = "fert_rates") %>% 
+  filter(year == 2023)
+
+# Top 10 countries per continent
+top10_fert_2023 <- fert_rates_2023 %>% 
+  filter(!is.na(continent)) %>% 
+  group_by(continent) %>% 
+  arrange(desc(fert_rates)) %>%
+  slice_head(n = 10) %>%
+  ungroup() %>% 
+  bind_rows(select(slice_max(fert_rates_2023, fert_rates, n = 10),-continent)) %>% 
+  mutate(
+    continent = case_match(
+      continent,
+      NA ~ "World",
+      .default = continent
+    )
+  )
+
+# Highlight key for shared data
+shared_fert23 <- SharedData$new(top10_fert_2023)
+
+# Filter dropdown
+continent_filter_fert <- crosstalk::filter_select(
+  id = "continent_filter_fert",
+  label = "Select a continent to examine",
+  sharedData = shared_fert23,
+  group = ~ continent,
+  allLevels = FALSE,
+  multiple = FALSE
+)
+
+# Plotly bar chart
+cantril_plotly_fert23 <- plot_ly(
+    shared_fert23, 
+    x = ~ fert_rates, 
+    y = ~ reorder(country, fert_rates), 
+    color = ~ continent, 
+    colors = c("#c6dbef","#9ecae1","#6baed6","#4292c6","#2171b5","#084594"),
+    type = "bar"
+  ) %>%
+    layout(
+      yaxis = list(title = "", categoryorder = "total ascending"),
+      xaxis = list(title = "Fertility Rate", range = c(0, 8))
+    )
+
+bscols(
+  list(continent_filter_fert, cantril_plotly_fert23)
+)
+```
+
+### Col 2 {width=50%}
+
+```{r title = "Map of countries by fertility rates over years, 1800-2023"}
+
+# Countries shapefile
+country_shp <- ne_countries()
+
+# Data wrangling
+fert_rates_isodata <- fert_rates_data %>% 
+  mutate(country_code = countrycode(country, "country.name", "iso3c"), .after = "country") %>%
+  mutate(
+    country_code = case_match(
+      country,
+      "Channel Islands" ~ "CHI", # Not officially assigned
+      "Netherlands Antilles" ~ "ANT",
+      .default = country_code
+    )
+  )
+
+fert_rates_geodata <- left_join(country_shp, fert_rates_isodata, by = c("adm0_a3" = "country_code")) %>% 
+  pivot_longer(cols = `1800`:`2023`, names_to = "year", values_to = "fert_rates")
+  
+fert_rates_map <- fert_rates_geodata %>% 
+  plot_geo() %>% 
+  add_trace(
+    z = ~ fert_rates,
+    color = ~ fert_rates,
+    locations = ~ adm0_a3,
+    text = ~ name,
+    frame = ~ year, colors = "YlGnBu"
+  ) %>% 
+  colorbar(limits = c(0, 10), title = "Total \nfertility \nrates")
+
+fert_rates_map
+
+```
+
+# Education Trends
+
+```{r include=FALSE}
+
+# Import world education data
+world_educ2023_data <- read_csv(here("data/SDG_Feb2024_WORLD_EDUC.csv"))
+
+# Print data
+world_pop2023_data
+
+# Key metric calculation: Adult literacy rate, population 15+ years, female (%)
+world_lit_2022 <- world_educ2023_data %>% 
+  filter(`Target and Indicators` == "Adult literacy rate, population 15+ years, female (%)") %>% 
+  pull(`2022`)
+
+# Key metric calculation: Completion rate, primary education, female (%)
+world_prim_2023 <- world_educ2023_data %>% 
+  filter(`Target and Indicators` == "Completion rate, primary education, female (%)") %>% 
+  pull(`2023`)
+
+# Key metric calculation: Completion rate, lower secondary education, female (%)
+world_lwsec_2023 <- world_educ2023_data %>% 
+  filter(`Target and Indicators` == "Completion rate, lower secondary education, female (%)") %>% 
+  pull(`2023`)
+
+# Key metric calculation: Completion rate, upper secondary education, female (%)
+world_upsec_2023 <- world_educ2023_data %>% 
+  filter(`Target and Indicators` == "Completion rate, upper secondary education, female (%)") %>% 
+  pull(`2023`)
+
+```
+
+## Row 1 {height=25%}
+
+```{r}
+vbs_fert <- list(
+  value_box(
+    title = "Completion, primary education, female (2023)",
+    value = paste0(round(world_prim_2023,1), "%"),
+    showcase = bsicons::bs_icon("backpack2"),
+    theme = value_box_theme(bg = "#bae4b3")
+  ),
+  value_box(
+    title = "Completion, lower secondary, female (2023)",
+    value = paste0(round(world_lwsec_2023,1), "%"),
+    showcase = bsicons::bs_icon("backpack4"),
+    theme = value_box_theme(bg = "#74c476")
+  ),
+  value_box(
+    title = "Completion, upper secondary, female (2023)",
+    value = paste0(round(world_upsec_2023,1), "%"),
+    showcase = bsicons::bs_icon("award"),
+    theme = value_box_theme(bg = "#31a354")
+  ),
+  value_box(
+    title = "Adult literacy, 15+ years, female (2022)",
+    value = paste0(round(world_lit_2022,1), "%"),
+    showcase = bsicons::bs_icon("easel"),
+    theme = value_box_theme(bg = "#006d2c")
+  )
+)
+
+layout_column_wrap(
+  width = "250px",
+  !!!vbs_fert
+)
+
+```
+
+## Row 2 {height=75%}
+
+```{r include=FALSE}
+
+# Import Mean Years in School Data
+mean_schyrs_data <- read_csv(here("data/mean_years_in_school_women_15_to_24_years.csv"))
+
+# View fertility data
+print(mean_schyrs_data)
+
+# Inspect fertility data
+vis_dat(mean_schyrs_data)
+
+```
+
+### Col 1 {width=50%}
+
+```{r title = "Top 10 countries by women mean years in school in 2015"}
+
+lit_rates_2015 <- mean_schyrs_data %>%
+   # Add  ISO Code to countries
+  mutate(country_code = countrycode(country, "country.name", "iso3c"), .after = "country") %>% 
+  mutate(continent = countrycode(country_code, "iso3c", "continent"), .after = "country_code") %>% 
+  pivot_longer(cols = !country:continent, names_to = "year", values_to = "sch_yrs") %>%
+  filter(year == 2015)
+
+# Top 10 countries per continent
+ top10_schyrs_2015 <- lit_rates_2015 %>%
+  group_by(continent) %>%
+  arrange(desc(sch_yrs)) %>%
+  slice_head(n = 10) %>%
+  ungroup() %>%
+  bind_rows(select(slice_max(lit_rates_2015, sch_yrs, n = 10),-continent)) %>%
+  mutate(
+    continent = case_match(
+      continent,
+      NA ~ "World",
+      .default = continent
+    )
+  )
+
+# Highlight key for shared data
+shared_sch15 <- SharedData$new(top10_schyrs_2015)
+
+# Filter dropdown
+continent_filter_sch <- filter_select(
+  id = "continent_filter_sch",
+  label = "Select a continent to examine",
+  sharedData = shared_sch15,
+  group = ~ continent,
+  allLevels = FALSE,
+  multiple = FALSE
+)
+
+# Plotly bar chart
+cantril_plotly_sch15 <- plot_ly(
+    shared_sch15,
+    x = ~ sch_yrs,
+    y = ~ reorder(country, sch_yrs),
+    color = ~ continent,
+    colors = c("#c7e9c0","#a1d99b","#74c476","#41ab5d","#238b45","#005a32"),
+    type = "bar"
+  ) %>%
+    layout(
+      yaxis = list(title = "", categoryorder = "total ascending"),
+      xaxis = list(title = "", range = c(0, 18))
+    )
+
+bscols(
+  list(continent_filter_sch, cantril_plotly_sch15)
+)
+
+```
+
+### Col 2 {width=50%}
+
+```{r title = "Map of countries by women mean years in school over time, 1970-2015"}
+
+# Data wrangling
+sch_yrs_isodata <- mean_schyrs_data %>% 
+  mutate(country_code = countrycode(country, "country.name", "iso3c"), .after = "country")
+
+sch_yrs_geodata <- left_join(country_shp, sch_yrs_isodata, by = c("adm0_a3" = "country_code")) %>%
+  pivot_longer(cols = `1970`:`2015`, names_to = "year", values_to = "sch_yrs") %>% 
+  filter(year <= 2023)
+  
+sch_yrs_map <- sch_yrs_geodata %>% 
+  plot_geo() %>% 
+  add_trace(
+    z = ~ sch_yrs,
+    color = ~ sch_yrs,
+    locations = ~ adm0_a3,
+    text = ~ name,
+    frame = ~ year, colors = "YlGn"
+  ) %>% 
+  colorbar(limits = c(0, 18), title = "Mean years \nin school \n(women)")
+
+sch_yrs_map
+
+```
+
+# Fertility vs Education
+
+```{r include=FALSE}
+
+# Merge fertility and education data
+fert_sch_data <- fert_rates_isodata %>% 
+  pivot_longer(!c("country","country_code"), names_to = "year", values_to = "fert_rates") %>% 
+  inner_join(pivot_longer(sch_yrs_isodata, !c("country","country_code"), names_to = "year", values_to = "sch_yrs"), by = c("country","country_code","year")) %>% 
+  mutate(continent = countrycode(country_code, "iso3c", "continent"))
+
+```
+
+## Row 1
+
+### Col 1 {.tabset}
+
+#### Fertility
+
+```{r}
+# Highlight key for shared data
+shared_fert_sch <- highlight_key(fert_sch_data)
+
+# Filter dropdown
+country_filter_fert <- filter_select(
+  id = "country_filter_fert",
+  label = "Select a country to examine",
+  sharedData = shared_fert_sch,
+  group = ~ country,
+  allLevels = FALSE,
+  multiple = TRUE
+)
+
+# Plotly
+cantril_plotly_fert_years <- plot_ly(
+  shared_fert_sch, 
+  x = ~ year, 
+  y = ~ fert_rates, 
+  color = ~ country, 
+  type = "scatter", 
+  mode = "lines + markers"
+) %>%
+  layout(
+    title = "Evolution of total fertility rates in countries, 1970-2015",
+    yaxis = list(title = "Total Fertility Rates", range = c(0, 10)),
+    xaxis = list(title = "Years")
+    )
+
+bscols(
+  list(country_filter_fert, cantril_plotly_fert_years)
+)
+```
+
+#### Education
+
+```{r}
+
+# Highlight key for shared data
+shared_fert_sch <- highlight_key(fert_sch_data)
+
+# Filter dropdown
+country_filter_sch <- filter_select(
+  id = "country_filter_sch",
+  label = "Select a country to examine",
+  sharedData = shared_fert_sch,
+  group = ~ country,
+  allLevels = FALSE,
+  multiple = TRUE
+)
+
+# Plotly
+cantril_plotly_sch_years <- plot_ly(
+  shared_fert_sch, 
+  x = ~ year, 
+  y = ~ sch_yrs, 
+  color = ~ country, 
+  type = "scatter", 
+  mode = "lines + markers"
+) %>%
+  layout(
+    title = "Female average years of schooling by country, 1970-2015",
+    yaxis = list(title = "Female mean years in school", range = c(0, 18)),
+    xaxis = list(title = "Years")
+    )
+
+bscols(
+  list(country_filter_sch, cantril_plotly_sch_years)
+)
+```
+
+
+### Col 2
+
+```{r title = "Trends in fertility rates and mean years of female education in the world, 1970-2015"}
+  
+fert_sch_yrs <- plot_ly(
+  fert_sch_data, 
+  x = ~ sch_yrs,
+  y = ~ fert_rates, 
+  color = ~ continent, 
+  frame = ~ year,
+  type = "scatter",
+  mode = "markers"
+) %>% 
+  layout(
+    xaxis = list(title = "Female mean years in school"),
+    yaxis = list(title = "Total Fertility Rates")
+  )
+
+fert_sch_yrs
+
+```
+
+# Data
+
+The two GAPMINDER datasets used in this dashboard are shown below and can be downloaded as CSV files. For the other data sources, please refer to the README file.
+
+## Row 1 {.tabset}
+
+### Fertility
+
+```{r}
+
+browsable(
+  tagList(
+    reactable(fert_rates_data, 
+              elementId = "fert_rates_data", 
+              searchable = T, 
+              filterable = T), 
+    
+tags$button("Download as CSV", 
+            onclick = "Reactable.downloadDataCSV('fert_rates_data')")
+  )
+)
+```
+
+### Education
+
+```{r}
+
+browsable(
+  tagList(
+    reactable(mean_schyrs_data, 
+              elementId = "mean_schyrs_data", 
+              searchable = T, 
+              filterable = T), 
+    
+tags$button("Download as CSV", 
+            onclick = "Reactable.downloadDataCSV('mean_schyrs_data')")
+  )
+)
+
+````
