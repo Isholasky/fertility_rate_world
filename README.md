@@ -1,9 +1,3 @@
----
-editor_options: 
-  markdown: 
-    wrap: 72
----
-
 # README for "Women's Fertility and Education: A Decades-Long Analysis"
 
 ## Description
